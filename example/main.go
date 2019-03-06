@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/saraka-tsukai/scc"
@@ -10,21 +11,27 @@ func main() {
 	var (
 		s   scc.Store
 		err error
+		t   interface{}
 	)
-	if s, err = scc.NewConsulStore("example1", []string{"http://127.0.0.1:8500"}); err != nil {
+	// if s, err = scc.NewZookeeperStore("example1", []string{"127.0.0.1:2181"}); err != nil {
+	if s, err = scc.NewConsulStore("example1", []string{"127.0.0.1:8500"}); err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	s.Set("test.key", 1)
-	s.Watch("test.key", func(data []byte, decode scc.Decoder) bool {
-		var tmp int
-		decode.Decode(data, &tmp)
+	json.Unmarshal([]byte(`{"a":1}`), &t)
+	s.Set("test.key", t)
+	s.Watch("test.key", func(data []byte) {
+		var tmp interface{}
+		json.Unmarshal(data, &tmp)
 		fmt.Println("data:", tmp)
-		return false
 	})
-	t := 0
 	s.Get("test.key", &t)
-	fmt.Println("get:", t)
-	fmt.Scanln()
+	fmt.Println("test.key", t)
+	var input string
+	for {
+		fmt.Scanln(&input)
+		json.Unmarshal([]byte(input), &t)
+		s.Set("test.key", t)
+	}
 }
