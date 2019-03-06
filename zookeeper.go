@@ -6,29 +6,29 @@ import (
 
 	"github.com/docker/libkv"
 	"github.com/docker/libkv/store"
-	"github.com/docker/libkv/store/consul"
+	"github.com/docker/libkv/store/zookeeper"
 	"github.com/smallnest/rpcx/codec"
 )
 
 func init() {
-	consul.Register()
+	zookeeper.Register()
 }
 
-type consulStore struct {
-	consulServers []string
-	options       *store.Config
-	kv            store.Store
-	codec         Codec
-	appName       string
-	watchList     map[string]chan struct{}
+type zookeeperStore struct {
+	zookeeperServers []string
+	options          *store.Config
+	kv               store.Store
+	codec            Codec
+	appName          string
+	watchList        map[string]chan struct{}
 }
 
-func NewConsulStore(appName string, consulServers []string) (Store, error) {
+func NewZookeeperStore(appName string, zookeeperServers []string) (Store, error) {
 	var (
-		c = &consulStore{
-			consulServers: consulServers,
-			codec:         codec.JSONCodec{},
-			watchList:     make(map[string]chan struct{}, 0),
+		c = &zookeeperStore{
+			zookeeperServers: zookeeperServers,
+			codec:            codec.JSONCodec{},
+			watchList:        make(map[string]chan struct{}, 0),
 		}
 		kv  store.Store
 		err error
@@ -40,7 +40,7 @@ func NewConsulStore(appName string, consulServers []string) (Store, error) {
 
 	c.appName = appName
 
-	if kv, err = libkv.NewStore(store.CONSUL, c.consulServers, c.options); err != nil {
+	if kv, err = libkv.NewStore(store.ZK, c.zookeeperServers, c.options); err != nil {
 		return nil, err
 	}
 	c.kv = kv
@@ -48,9 +48,9 @@ func NewConsulStore(appName string, consulServers []string) (Store, error) {
 	return c, nil
 }
 
-func (c *consulStore) SetOption(options *store.Config) error {
+func (c *zookeeperStore) SetOption(options *store.Config) error {
 	c.options = options
-	kv, err := libkv.NewStore(store.CONSUL, c.consulServers, c.options)
+	kv, err := libkv.NewStore(store.ETCD, c.zookeeperServers, c.options)
 	if err != nil {
 		return err
 	}
@@ -58,19 +58,19 @@ func (c *consulStore) SetOption(options *store.Config) error {
 	return nil
 }
 
-func (c *consulStore) SetCodec(codec Codec) {
+func (c *zookeeperStore) SetCodec(codec Codec) {
 	c.codec = codec
 }
 
-func (c *consulStore) GetCodec() Codec {
+func (c *zookeeperStore) GetCodec() Codec {
 	return c.codec
 }
 
-func (c *consulStore) combinKey(key string) string {
+func (c *zookeeperStore) combinKey(key string) string {
 	return strings.Trim(fmt.Sprintf("%s/%s", c.appName, strings.Trim(key, "/")), "/")
 }
 
-func (c *consulStore) Get(key string, value interface{}) error {
+func (c *zookeeperStore) Get(key string, value interface{}) error {
 	var (
 		kvPaire *store.KVPair
 		err     error
@@ -85,7 +85,7 @@ func (c *consulStore) Get(key string, value interface{}) error {
 	}
 	return c.codec.Decode(kvPaire.Value, value)
 }
-func (c *consulStore) Set(key string, value interface{}) error {
+func (c *zookeeperStore) Set(key string, value interface{}) error {
 	var (
 		data []byte
 		err  error
@@ -96,7 +96,7 @@ func (c *consulStore) Set(key string, value interface{}) error {
 	return c.kv.Put(c.combinKey(key), data, &store.WriteOptions{IsDir: false})
 }
 
-func (c *consulStore) Watch(key string, cb func(data []byte)) (err error) {
+func (c *zookeeperStore) Watch(key string, cb func(data []byte)) (err error) {
 	var (
 		stopCh chan struct{}
 		events <-chan *store.KVPair
@@ -115,6 +115,9 @@ func (c *consulStore) Watch(key string, cb func(data []byte)) (err error) {
 		for {
 			select {
 			case pair := <-events:
+				if pair == nil {
+					continue
+				}
 				cb(pair.Value)
 			}
 		}
@@ -122,7 +125,7 @@ func (c *consulStore) Watch(key string, cb func(data []byte)) (err error) {
 	return nil
 }
 
-func (c *consulStore) StopWatch(key string) error {
+func (c *zookeeperStore) StopWatch(key string) error {
 	var (
 		stopCh chan struct{}
 		ok     bool
