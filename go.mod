@@ -1,4 +1,4 @@
-module github.com/saraka-tsukai/scc
+module github.com/saraka/scc
 
 require (
 	github.com/docker/libkv v0.2.1
